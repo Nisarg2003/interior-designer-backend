@@ -33,9 +33,8 @@ export const createPost = async (req, res) => {
                 Key: thumbnailFileName,
                 ContentType: thumbnailFile.mimetype,
             };
-
+            // Uploading Thumbnail for Post.
             await s3.send(new PutObjectCommand(thumbnailParams));
-            console.log("Thumbnail Uploaded Successfully");
             uploadedFiles.push({
                 fileName: thumbnailFileName
             });
@@ -51,10 +50,9 @@ export const createPost = async (req, res) => {
                     Key: photoFileName,
                     ContentType: photo.mimetype,
                 };
-
+                // Uploading Images for Post 
                 await s3.send(new PutObjectCommand(photoParams));
                 const photoUrl = `https://${bucketName}.s3.amazonaws.com/${photoFileName}`;
-                console.log("Photo Uploaded Successfully");
                 uploadedFiles.push({
                     fileName: photoFileName
                 });
@@ -67,11 +65,9 @@ export const createPost = async (req, res) => {
             price: req.body.price,
             files: uploadedFiles,
         });
-
         await newPost.save();
         res.status(200).json({
             message: 'Files uploaded successfully!',
-            uploadedFiles,
         });
     } catch (error) {
         console.error('Error uploading files:', error);
