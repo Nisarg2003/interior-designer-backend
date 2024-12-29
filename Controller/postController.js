@@ -112,14 +112,19 @@ export const findPostByCategoty = async(req,res) => {
     try {
         const {categories} = req.body;
 
-        if (!Array.isArray(categories) || categories.length === 0) {
-            return res.status(400).json({ message: 'Categories must be a non-empty array.' });
+        if (!Array.isArray(categories) || categories.length === 0 || !categories) {
+            const posts = await postModel.find().sort({ createdAt: -1 });
+
+            for (let post of posts) {
+                for (let file of post.files) {
+                    const signedUrl = await generateSignedUrl(file.fileName);
+                    file.url = signedUrl; 
+                }
+            }
+            return res.status(200).json(posts);
         }
 
         const posts = await postModel.find({ category: { $in: categories } }).sort({ createdAt: -1 });
-        if(posts.length === 0){
-            return res.status(404).json({message: 'No posts for this category'})
-        }
         for (let post of posts) {
             for (let file of post.files) {
                 const signedUrl = await generateSignedUrl(file.fileName);
@@ -131,5 +136,24 @@ export const findPostByCategoty = async(req,res) => {
     } catch (error) {
         console.error('Error fetching posts By Categories:', error);
         res.status(500).json({ message: 'Error fetching posts By Categories' });
+    }
+}
+
+export const findPostById = async(req,res)=>{
+    try {
+        const {id} = req.params;
+        if(!id){
+            return res.status(404).json({message:'Id not Found'});
+        }
+        const post = await postModel.findById({_id: id});
+        for (let file of post.files) {
+            const signedUrl = await generateSignedUrl(file.fileName);
+            file.url = signedUrl; 
+        }
+        res.status(200).send(post);
+        
+    }catch (error) {
+        console.error('Error fetching posts By Id:', error);
+        res.status(500).json({ message: 'Error fetching posts By Id' });
     }
 }

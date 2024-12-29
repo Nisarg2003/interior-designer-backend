@@ -1,7 +1,7 @@
 import express from 'express';
 
 import multer from 'multer';
-import {createPost, findPostByCategoty, getPost} from '../Controller/postController.js';
+import {createPost, findPostByCategoty, findPostById, getPost} from '../Controller/postController.js';
 
 const storage = multer.memoryStorage()
 const upload = multer({ storage: storage })
@@ -17,6 +17,7 @@ router.post('/createPost',
 
 router.get('/getAllPost',getPost)
 router.post('/postByCategory',findPostByCategoty)
+router.post('/postById/:id',findPostById)
 
 
 export default router;
