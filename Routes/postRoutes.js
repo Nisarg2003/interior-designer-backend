@@ -17,7 +17,7 @@ router.post('/createPost',
 
 router.get('/getAllPost',getPost)
 router.post('/postByCategory',findPostByCategoty)
-router.post('/postById/:id',findPostById)
+router.get('/postById/:id',findPostById)
 
 
 export default router;
