@@ -54,6 +54,7 @@ export const createUserQuery = async(req,res) => {
         `;
         try{
             await sendMail(subject,text);
+            return res.status(201).json({ message: "Query submitted,and mail sent successfully."});
         }catch (emailError) {
             return res.status(500).json({ message: "Query submitted, but failed to send email."});
         }
