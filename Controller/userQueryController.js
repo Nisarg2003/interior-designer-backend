@@ -64,3 +64,37 @@ export const createUserQuery = async(req,res) => {
         return res.status(500).json({ message: "An error occurred", error });
     }
 }
+
+export const getUserQuery = async(req,res) => {
+    try {
+        const { isResolvedStatus } = req.body;
+        if(!isResolvedStatus){
+            const userQuery = await userQueryModel.find().sort({ createdAt: -1 });
+            return res.status(201).json(userQuery);
+        }
+        const userQuery = await userQueryModel.find({ isResolved: isResolvedStatus }).sort({ createdAt: -1 });
+        return res.status(201).json(userQuery);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "An error occurred in getting userQuries", error });
+    }
+}
+
+export const resolveQuery = async(req,res) => {
+    try {
+        const { queryId } = req.body;
+        const { updateIsResolvedStatus } = req.body;
+        if (!queryId) {
+            return res.status(400).json({ message: "Query ID is required" });
+        }
+        const updatedUserQuery = await userQueryModel.findByIdAndUpdate(queryId, { isResolved: updateIsResolvedStatus }, { new: true });
+        return res.status(201).json({
+            message : "Query resolved successfully",
+            updatedUserQuery
+        });
+    }
+    catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "An error occurred in resolving query", error });
+    }   
+}

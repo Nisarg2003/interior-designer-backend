@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv, { config } from 'dotenv';
 import connectDb from './Config/connectDb.js';
 import postRoutes from "./Routes/postRoutes.js"
+import queryRoutes from "./Routes/queryRoutes.js"
 
 dotenv.config();
 connectDb();
@@ -18,6 +19,8 @@ app.get('/', (req, res) => {
 });
 
 app.use("/api",postRoutes)
+app.use("/api/queries",queryRoutes)
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
