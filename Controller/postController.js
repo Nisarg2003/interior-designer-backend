@@ -157,3 +157,31 @@ export const findPostById = async(req,res)=>{
         res.status(500).json({ message: 'Error fetching posts By Id' });
     }
 }
+
+export const getCategories = async (req, res) => {
+  try {
+    const categoryCounts = await postModel.aggregate([
+      {
+        $group: {
+          _id: "$category",
+          postCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          category: "$_id",
+          postCount: 1
+        }
+      },
+      {
+        $sort: { postCount: -1 }
+      }
+    ]);
+    res.status(200).json(categoryCounts);
+
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({ message: 'Error fetching categories' });
+  }
+};
