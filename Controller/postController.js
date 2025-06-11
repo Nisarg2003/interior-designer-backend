@@ -1,162 +1,142 @@
-import crypto from 'crypto'
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import postModel from '../Model/postModel.js';
-import dotenv from 'dotenv'
+import { v2 as cloudinary } from "cloudinary";
+import postModel from "../Model/postModel.js";
+import dotenv from "dotenv";
 
-dotenv.config()
-const generateFileName = (bytes = 32) => crypto.randomBytes(bytes).toString('hex')
+dotenv.config();
 
-const bucketName = process.env.BUCKET_NAME
-const bucketRegion = process.env.BUCKET_REGION
-const accessKey = process.env.ACCESS_KEY
-const secretAccessKey = process.env.SECRET_ACCESS_KEY
-const s3 = new S3Client({
-    region: bucketRegion,
-    credentials: {
-        accessKeyId: accessKey,
-        secretAccessKey: secretAccessKey,
-    },
-})
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export const createPost = async (req, res) => {
-    try {
-        const uploadedFiles = [];
+  try {
+    const uploadedFiles = [];
 
-        if (req.files['thumbnail']) {
-            const thumbnailFile = req.files['thumbnail'][0];
-            const thumbnailFileName = generateFileName();
-
-            const thumbnailParams = {
-                Bucket: bucketName,
-                Body: thumbnailFile.buffer,
-                Key: thumbnailFileName,
-                ContentType: thumbnailFile.mimetype,
-            };
-            // Uploading Thumbnail for Post.
-            await s3.send(new PutObjectCommand(thumbnailParams));
+    // Upload Thumbnail
+    if (req.files["thumbnail"]) {
+      const thumbnailFile = req.files["thumbnail"][0];
+      await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            resource_type: "image",
+            folder: "thumbnails",
+          },
+          (error, result) => {
+            if (error) return reject(error);
             uploadedFiles.push({
-                fileName: thumbnailFileName
+              fileName: result.public_id,
+              url: result.secure_url,
             });
-        }
-
-        if (req.files['photos']) {
-            for (const photo of req.files['photos']) {
-                const photoFileName = generateFileName();
-
-                const photoParams = {
-                    Bucket: bucketName,
-                    Body: photo.buffer,
-                    Key: photoFileName,
-                    ContentType: photo.mimetype,
-                };
-                // Uploading Images for Post 
-                await s3.send(new PutObjectCommand(photoParams));
-                const photoUrl = `https://${bucketName}.s3.amazonaws.com/${photoFileName}`;
-                uploadedFiles.push({
-                    fileName: photoFileName
-                });
-            }
-        }
-        const newPost = new postModel({
-            title: req.body.title || 'Untitled Post',
-            description: req.body.description || '',
-            category: req.body.category,
-            price: req.body.price,
-            files: uploadedFiles,
-        });
-        await newPost.save();
-        res.status(200).json({
-            message: 'Files uploaded successfully!',
-        });
-    } catch (error) {
-        console.error('Error uploading files:', error);
-        res.status(500).json({ message: 'Error uploading files', error });
-    }
-};
-const generateSignedUrl = async (fileName) => {
-    try {
-        const url = await getSignedUrl(
-            s3,
-            new GetObjectCommand({
-                Bucket: bucketName,
-                Key: fileName
-            }),
-            { expiresIn: 60 * 60 * 24 }
+            resolve();
+          }
         );
-        return url;
-    } catch (error) {
-        console.error('Error generating signed URL:', error);
-        return null;
+        uploadStream.end(thumbnailFile.buffer);
+      });
     }
+
+    // Upload Photos
+    if (req.files["photos"]) {
+      for (const photo of req.files["photos"]) {
+        await new Promise((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              resource_type: "image",
+              folder: "photos",
+            },
+            (error, result) => {
+              if (error) return reject(error);
+              uploadedFiles.push({
+                fileName: result.public_id,
+                url: result.secure_url,
+              });
+              resolve();
+            }
+          );
+          uploadStream.end(photo.buffer);
+        });
+      }
+    }
+
+    const newPost = new postModel({
+      title: req.body.title || "Untitled Post",
+      description: req.body.description || "",
+      category: req.body.category,
+      price: req.body.price,
+      files: uploadedFiles,
+    });
+    await newPost.save();
+
+    return res.status(200).send(newPost);
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Error in creating post", error: error.message });
+  }
 };
 
 export const getPost = async (req, res) => {
-    try {
-        const posts = await postModel.find().sort({ createdAt: -1 });
+  try {
+    const posts = await postModel.find().sort({ createdAt: -1 });
 
-        for (let post of posts) {
-            for (let file of post.files) {
-                const signedUrl = await generateSignedUrl(file.fileName);
-                file.url = signedUrl; 
-            }
-        }
-        res.status(200).json(posts);
-    } catch (error) {
-        console.error('Error fetching posts:', error);
-        res.status(500).json({ message: 'Error fetching posts' });
+    if (!posts) {
+      return res.status(400).send({ message: "No posts found" });
+      s;
     }
+
+    return res.status(200).send(posts);
+  } catch (error) {
+    console.error("Error fetching posts:", error);
+    return res.status(500).send({ message: "Error fetching posts" });
+  }
 };
 
-export const findPostByCategoty = async(req,res) => {
-    try {
-        const {categories} = req.body;
+export const findPostByCategoty = async (req, res) => {
+  try {
+    const { categories } = req.body;
 
-        if (!Array.isArray(categories) || categories.length === 0 || !categories) {
-            const posts = await postModel.find().sort({ createdAt: -1 });
+    if (!Array.isArray(categories) || categories.length === 0 || !categories) {
+      const posts = await postModel.find().sort({ createdAt: -1 });
 
-            for (let post of posts) {
-                for (let file of post.files) {
-                    const signedUrl = await generateSignedUrl(file.fileName);
-                    file.url = signedUrl; 
-                }
-            }
-            return res.status(200).json(posts);
-        }
-
-        const posts = await postModel.find({ category: { $in: categories } }).sort({ createdAt: -1 });
-        for (let post of posts) {
-            for (let file of post.files) {
-                const signedUrl = await generateSignedUrl(file.fileName);
-                file.url = signedUrl; 
-            }
-        }
-        res.status(200).json(posts);
-
-    } catch (error) {
-        console.error('Error fetching posts By Categories:', error);
-        res.status(500).json({ message: 'Error fetching posts By Categories' });
+      return res.status(200).send(posts);
     }
-}
 
-export const findPostById = async(req,res)=>{
-    try {
-        const {id} = req.params;
-        if(!id){
-            return res.status(404).json({message:'Id not Found'});
-        }
-        const post = await postModel.findById({_id: id});
-        for (let file of post.files) {
-            const signedUrl = await generateSignedUrl(file.fileName);
-            file.url = signedUrl; 
-        }
-        res.status(200).send(post);
-        
-    }catch (error) {
-        console.error('Error fetching posts By Id:', error);
-        res.status(500).json({ message: 'Error fetching posts By Id' });
+    const posts = await postModel
+      .find({ category: { $in: categories } })
+      .sort({ createdAt: -1 });
+    if (!posts || posts.length === 0) {
+      return res
+        .status(400)
+        .send({ message: "No posts found for the categories" });
     }
-}
+
+    return res.status(200).send(posts);
+  } catch (error) {
+    console.error("Error fetching posts By Categories:", error);
+    return res
+      .status(500)
+      .send({ message: "Error fetching posts By Categories" });
+  }
+};
+
+export const findPostById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(404).send({ message: "Id not Found" });
+    }
+    const post = await postModel.findById({ _id: id });
+    if (!post) {
+      return res.status(404).send({ message: "Post not found for given ID" });
+    }
+
+    return res.status(200).send(post);
+  } catch (error) {
+    console.error("Error fetching posts By Id:", error);
+    return res.status(500).send({ message: "Error fetching posts By Id" });
+  }
+};
 
 export const getCategories = async (req, res) => {
   try {
@@ -164,24 +144,23 @@ export const getCategories = async (req, res) => {
       {
         $group: {
           _id: "$category",
-          postCount: { $sum: 1 }
-        }
+          postCount: { $sum: 1 },
+        },
       },
       {
         $project: {
           _id: 0,
           category: "$_id",
-          postCount: 1
-        }
+          postCount: 1,
+        },
       },
       {
-        $sort: { postCount: -1 }
-      }
+        $sort: { postCount: -1 },
+      },
     ]);
-    res.status(200).json(categoryCounts);
-
+    return res.status(200).send(categoryCounts);
   } catch (error) {
-    console.error('Error fetching categories:', error);
-    res.status(500).json({ message: 'Error fetching categories' });
+    console.error("Error fetching categories:", error);
+    return res.status(500).send({ message: "Error fetching categories" });
   }
 };
