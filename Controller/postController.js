@@ -12,6 +12,7 @@ cloudinary.config({
 
 export const createPost = async (req, res) => {
   try {
+    let thumbnailData = null;
     const uploadedFiles = [];
 
     // Upload Thumbnail
@@ -25,10 +26,10 @@ export const createPost = async (req, res) => {
           },
           (error, result) => {
             if (error) return reject(error);
-            uploadedFiles.push({
+            thumbnailData = {
               fileName: result.public_id,
               url: result.secure_url,
-            });
+            };
             resolve();
           }
         );
@@ -64,6 +65,7 @@ export const createPost = async (req, res) => {
       description: req.body.description || "",
       category: req.body.category,
       price: req.body.price,
+      thumbnail: thumbnailData,
       files: uploadedFiles,
     });
     await newPost.save();
@@ -162,5 +164,106 @@ export const getCategories = async (req, res) => {
   } catch (error) {
     console.error("Error fetching categories:", error);
     return res.status(500).send({ message: "Error fetching categories" });
+  }
+};
+
+export const editPost = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const existingPost = await postModel.findById(id);
+    if (!existingPost)
+      return res.status(404).json({ message: "Post not found" });
+
+    const updateData = {
+      title: req.body.title || existingPost.title,
+      description: req.body.description || existingPost.description,
+      category: req.body.category || existingPost.category,
+      price: req.body.price || existingPost.price,
+      thumbnail: existingPost.thumbnail,
+      files: existingPost.files,
+    };
+
+    if (req.files["thumbnail"]) {
+      if (existingPost.thumbnail?.fileName) {
+        await cloudinary.uploader.destroy(existingPost.thumbnail.fileName);
+      }
+
+      const thumbnailFile = req.files["thumbnail"][0];
+      await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            resource_type: "image",
+            folder: "thumbnails",
+          },
+          (error, result) => {
+            if (error) return reject(error);
+            updateData.thumbnail = {
+              fileName: result.public_id,
+              url: result.secure_url,
+            };
+            resolve();
+          }
+        );
+        uploadStream.end(thumbnailFile.buffer);
+      });
+    }
+
+    if (req.files["photos"]) {
+      for (const photo of req.files["photos"]) {
+        await new Promise((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              resource_type: "image",
+              folder: "photos",
+            },
+            (error, result) => {
+              if (error) return reject(error);
+              updateData.files.push({
+                fileName: result.public_id,
+                url: result.secure_url,
+              });
+              resolve();
+            }
+          );
+          uploadStream.end(photo.buffer);
+        });
+      }
+    }
+
+    const updatedPost = await postModel.findByIdAndUpdate(id, updateData, {
+      new: true,
+    });
+
+    return res.status(200).json(updatedPost);
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Error editing post", error: error.message });
+  }
+};
+
+export const deletePost = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const post = await postModel.findById(id);
+
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    if (post.thumbnail?.fileName) {
+      await cloudinary.uploader.destroy(post.thumbnail.fileName);
+    }
+
+    for (const photo of post.files) {
+      await cloudinary.uploader.destroy(photo.fileName);
+    }
+
+    await postModel.findByIdAndDelete(id);
+
+    return res.status(200).json({ message: "Post deleted successfully" });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Error deleting post", error: error.message });
   }
 };

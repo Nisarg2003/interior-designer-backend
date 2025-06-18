@@ -10,13 +10,19 @@ const postModel = new mongoose.Schema(
       type: String,
       require: true,
     },
+    thumbnail: {
+      fileName: { type: String, required: true },
+      url: { type: String, required: true },
+    },
+
     files: [
       {
         _id: false,
         fileName: { type: String, required: true },
-        url: { type: String },
+        url: { type: String, required: true },
       },
     ],
+
     price: {
       type: String,
     },
