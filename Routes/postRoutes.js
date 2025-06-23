@@ -10,7 +10,7 @@ import {
   getCategories,
   getPost,
 } from "../Controller/postController.js";
-import { authenticateJWT } from "../Middelware/authMiddleware.js";
+import { authenticateJWT } from "../Middleware/authMiddleware.js";
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
